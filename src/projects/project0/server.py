@@ -6,16 +6,13 @@ import socket
 HOST = "127.0.0.1"
 PORT = 4300
 
-
 def format(message: str) -> bytes:
     """Convert (encode) the message to bytes"""
-    raise NotImplementedError
-
+    return "Hello, {}".format(message).encode()
 
 def parse(data: bytes) -> str:
     """Convert (decode) bytes to a string"""
-    raise NotImplementedError
-
+    return data.decode()[18:]
 
 def server_loop():
     print("The server has started")

@@ -9,15 +9,11 @@ PORT = 4300
 
 def format(message: list) -> bytes:
     """Convert (encode) the message to bytes"""
-    # TODO: Implement this function
-    raise NotImplementedError
-
-
+    return "Hello, my name is {}".format(" ".join(message)).encode()
+    
 def parse(data: bytes) -> str:
     """Convert (decode) bytes to a string"""
-    # TODO: Implement this function
-    raise NotImplementedError
-
+    return data.decode()
 
 def client_loop(name: str):
     print("The client has started")
