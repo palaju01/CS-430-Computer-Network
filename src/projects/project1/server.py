@@ -18,30 +18,53 @@ def read_file(filename: str) -> Tuple[dict, int]:
     `count` is the number of countries in the world
     Make sure not to count United States of America and USA as two different countries
     """
-    raise NotImplementedError
+    countries = {}
+    capitals = set()
+    count = 0
+    with open(filename) as csvfile:
+        csvreader = csv.DictReader(csvfile, delimiter=';')
+        for row in csvreader:
+            for name in list(row["Country"].split(", ")):
+                countries[name] = row["Capital"]
+            if row["Capital"] not in capitals:
+                count += 1
+                capitals.add(row["Capital"])
+        print(count)
+    return (countries, count)
 
 
 def find_capital(world: dict, country: str) -> str:
     """Return the capital of a country if it exists
     Return *No such country* otherwise
     """
-    raise NotImplementedError
+    if country in world:
+        return world[country]
+    else:
+        return "No such country."
 
 
 def format(message: str) -> bytes:
     """Convert (encode) the message to bytes"""
-    raise NotImplementedError
+    return message.encode()
 
 
 def parse(data: bytes) -> str:
     """Convert (decode) bytes to a string"""
-    raise NotImplementedError
+    return data.decode()
 
 
 def server_loop(world: dict):
     print("The server has started")
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        raise NotImplementedError
+        sock.bind((HOST, PORT))
+        while True:
+            msg, client = sock.recvfrom(2048)
+            msg = parse(msg)
+            if msg == "BYE":
+                break
+            print(f"Received {msg}")
+            sock.sendto(format(find_capital(world,msg)), client)
+        sock.close()
     print("The server has finished")
 
 

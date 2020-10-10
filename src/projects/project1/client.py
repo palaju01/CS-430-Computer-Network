@@ -10,23 +10,29 @@ PORT = 4300
 
 def format(message: list) -> bytes:
     """Convert (encode) the message to bytes"""
-    raise NotImplementedError
+    return message.encode()
 
 
 def parse(data: bytes) -> str:
     """Convert (decode) bytes to a string"""
-    raise NotImplementedError
+    return data.decode()
 
 
 def read_user_input() -> str:
     """Read user input from the console and return it"""
-    raise NotImplementedError
+    return input("Type a country's name: ")
 
 
 def client_loop():
     print("The client has started")
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        raise NotImplementedError
+        while True:
+            msg = read_user_input()
+            sock.sendto(format(msg), (HOST, PORT))
+            if msg == "BYE":
+                break
+            response, _ = sock.recvfrom(2048)
+            print(f"Received: {parse(response)}")
     print("The client has finished")
 
 
