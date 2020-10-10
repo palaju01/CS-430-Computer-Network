@@ -22,7 +22,7 @@ def read_file(filename: str) -> Tuple[dict, int]:
     capitals = set()
     count = 0
     with open(filename) as csvfile:
-        csvreader = csv.DictReader(csvfile, delimiter=';')
+        csvreader = DictReader(csvfile, delimiter=';')
         for row in csvreader:
             for name in list(row["Country"].split(", ")):
                 countries[name] = row["Capital"]
