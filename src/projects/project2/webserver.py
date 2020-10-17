@@ -10,9 +10,9 @@ LOGFILE = "webserver.log"
 
 def convertToDict(request):
     """ Decode the message and return it as a dictionary """
+
     # Convert it to string
     requestString = request.decode()
-    print(requestString)
 
     # Create Dictionary for data
     data = {}
@@ -38,21 +38,29 @@ def convertToDict(request):
 def writeLogRequest(time, fileRequested, clientIP, clientBroser, logFile):
     """ Appends the provided information into given log file """
     with open(logFile,"a") as log:
+        # Formats the log entry
         output = time + " | " + fileRequested + " | " + clientIP + " | " + clientBroser + "\n"
+        # Append the entry to log file
         log.write(output)
 
 
 def main():
     """Main loop"""
     with socket(AF_INET, SOCK_STREAM) as server_sock:
+        # Reuse socket if already in use
         server_sock.setsockopt(SOL_SOCKET, SO_REUSEADDR,1)
+
         server_sock.bind((ADDRESS,PORT))
         server_sock.listen(1)
         while True:
             connection, client = server_sock.accept()
             with connection:
                 request = connection.recv(1024)
+
+                # Convert request to dictionary
                 data = convertToDict(request)
+
+                # Append current request information to log file
                 writeLogRequest(data["time"], data["file"], client[0], data["browser"], LOGFILE)
 
                 # Not Implemented
@@ -61,7 +69,7 @@ def main():
                     connection.send("<html><head></head><body><h1>501 Not Implemented</h1></body></html>".encode())
 
                 # Method Not Allowed
-                if data["method"] != "GET":
+                elif data["method"] != "GET":
                     connection.send("HTTP/1.1 405 Method Not Allowed\r\n\r\n".encode())
                     connection.send("<html><head></head><body><h1>405 Method Not Allowed</h1></body></html>".encode())
 
@@ -89,7 +97,6 @@ def main():
                     # Send file
                     with open("alice30.txt","rb") as content:
                         connection.send(content.read())
-            connection.close()
 
 
 if __name__ == "__main__":
