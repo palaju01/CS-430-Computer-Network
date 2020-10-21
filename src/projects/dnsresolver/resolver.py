@@ -73,17 +73,31 @@ def get_domain_name_location(byte_list: list) -> int:
     return num & 16383
 
 
-def parse_cli_query(
-    q_domain: str, q_type: str, q_server: str = None
-) -> Tuple[list, int, str]:
+def parse_cli_query(q_domain: str, q_type: str, q_server: str = None) -> Tuple[list, int, str]:
     """
     Parse command-line query
     Return a tuple of the domain (as a list of subdomains), numeric type, and the server
     If the server is not specified, pick a random one from `PUBLIC_DNS_SERVER`
     If type is not `A` or `AAAA`, raise `ValueError`
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    # split domain to list of subdomains
+    subdomain = q_domain.split(".")
+
+    # check if type is valid
+    if not q_type:
+        numericType = DNS_TYPES["A"]
+    elif q_type == "A" or q_type == "AAAA":
+        numericType = DNS_TYPES[q_type]
+    else:
+        raise ValueError("Unknown query type")
+    
+    # pick random server if it is not provided
+    if q_server:
+        server = q_server
+    else:
+        server = choice(PUBLIC_DNS_SERVER)
+
+    return (subdomain,numericType,server)
 
 
 def format_query(q_domain: list, q_type: int) -> bytearray:
@@ -97,8 +111,16 @@ def format_query(q_domain: list, q_type: int) -> bytearray:
     - questions: 1
     - class: Internet
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    query = bytearray()
+    query.extend(val_to_2_bytes(randint(0,65535)))       # Add Transaction ID
+    query.extend(val_to_2_bytes(256))                    # Add flags
+    query.extend(val_to_2_bytes(1))                      # Add number of questions
+    query.extend(val_to_2_bytes(0))                      # Add number of answers
+    query.extend(val_to_n_bytes(0,1))                    # Add number of additional/authority records
+    
+    query.extend(val_to_n_bytes(q_type,2))               # Add type
+    query.extend(val_to_n_bytes(1,2))                    # Add class
+    return query
 
 
 def parse_response(resp_bytes: bytes) -> list:
