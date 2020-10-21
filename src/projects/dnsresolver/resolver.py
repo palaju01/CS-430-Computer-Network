@@ -32,8 +32,7 @@ def val_to_2_bytes(value: int) -> Tuple[int]:
     Split a value into 2 bytes
     Return the result as a tuple of 2 integers
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    return ((value >> 8) & 0xFF, value & 0xFF)
 
 
 def val_to_n_bytes(value: int, n_bytes: int) -> Tuple[int]:
@@ -41,14 +40,19 @@ def val_to_n_bytes(value: int, n_bytes: int) -> Tuple[int]:
     Split a value into n bytes
     Return the result as a tuple of n integers
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    bytesList = []
+    while len(bytesList) < n_bytes:
+        bytesList.insert(0, value & 0xFF)
+        value = value >> 8
+    return tuple(bytesList)
 
 
 def bytes_to_val(byte_list: list) -> int:
     """Merge n bytes into a value"""
-    # TODO: Implement this function
-    raise NotImplementedError
+    value = 0
+    for position, index in enumerate(range(len(byte_list),0,-1)):
+        value += byte_list[index-1] << (8*position)
+    return value
 
 
 def get_2_bits(byte_list: list) -> int:
@@ -56,8 +60,8 @@ def get_2_bits(byte_list: list) -> int:
     Extract first two bits of a two-byte sequence
     Return the result as a decimal value
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    num = bytes_to_val(byte_list)
+    return num >> (len(bin(num)[2:])-2)
 
 
 def get_domain_name_location(byte_list: list) -> int:
@@ -65,8 +69,8 @@ def get_domain_name_location(byte_list: list) -> int:
     Extract size of the offset from a two-byte sequence
     Return the result as a decimal value
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    num = bytes_to_val(byte_list)
+    return num & 16383
 
 
 def parse_cli_query(

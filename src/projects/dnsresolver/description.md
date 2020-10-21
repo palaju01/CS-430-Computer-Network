@@ -113,7 +113,7 @@ python -m pytest tests/projects/dnsresolver/test_resolver.py
 `get_offset` extracts the rightmost 14 bits from a 2-byte sequence. This function can be used to extract the location of the domain name inside a response. Note that a response may contain either labels or pointers, so don't rely on the *magic* of `0xc00c`. A more descriptive name for this function is *get_domain_name_location_within_a_server_response*. Do not confuse the offset found by this function with the offset of answers within the response.
 
 ```text
-0xc00c = 0b1100000000001100 => rightmost 14 bits are 0b1100= 12
+0xc00c = 0b1100000000001100 => rightmost 14 bits are 0b1100 = 12
 ```
 
 ### `parse_cli_query(q_domain: str, q_type: str, q_server: str = None) -> Tuple[list, int, str]`
