@@ -95,7 +95,6 @@ def parse_cli_query(q_domain: str, q_type: str, q_server: str = None) -> Tuple[l
         server = q_server
     else:
         server = choice(PUBLIC_DNS_SERVER)
-
     return (subdomain,numericType,server)
 
 
@@ -143,7 +142,6 @@ def parse_response(resp_bytes: bytes) -> list:
     while resp_bytes[answer_start] != 0:
         answer_start += 1
     answer_start += 5
-    print(parse_answers(resp_bytes, answer_start, rr_ans))
     return parse_answers(resp_bytes, answer_start, rr_ans)
 
 
@@ -182,15 +180,12 @@ def parse_answers(resp_bytes: bytes, answer_start: int, rr_ans: int) -> List[tup
         if move:
             answer_start += 1
         domain = ".".join(subdomains)
-        print(domain)
         
         # Retrieve TTL
         ttl = int.from_bytes(resp_bytes[answer_start+4:answer_start+8],byteorder='big')
-        print(ttl)
 
         # Retrieve address
         dataLength = int.from_bytes(resp_bytes[answer_start+8:answer_start+10],byteorder='big')
-        print(dataLength)
         if dataLength == 4:             # IPv4 request
             address = parse_address_a(4, resp_bytes[answer_start+10:answer_start+dataLength+11])
         else:             # IPv4 request
@@ -248,8 +243,18 @@ def resolve(query: tuple) -> None:
 
 def main():
     """Main function"""
-    # TODO: Complete this function
     arg_parser = argparse.ArgumentParser(description="Parse arguments")
+    # Required arguments
+    #requiredArguments = arg_parser.add_argument_group('Required parse arguments')
+    arg_parser.add_argument('domain', help='Domain name')
+    # Optional arguments
+    #optionalArguments = arg_parser.add_argument_group('Optional parse arguments')
+    arg_parser.add_argument('-t', "--type", help='Type of request', required=False)
+    arg_parser.add_argument('-s', "--server", help='Server used to resolve domain name', required=False)
+
+    arg_parser.add_argument(
+        "-d", "--debug", action="store_true", help="Enable logging.DEBUG mode"
+    )
     args = arg_parser.parse_args()
 
     logger = logging.getLogger("root")
@@ -260,7 +265,6 @@ def main():
     logging.basicConfig(format="%(levelname)s: %(message)s", level=logger.level)
 
     resolve((args.domain, args.type, args.server))
-    raise NotImplementedError
 
 
 if __name__ == "__main__":
