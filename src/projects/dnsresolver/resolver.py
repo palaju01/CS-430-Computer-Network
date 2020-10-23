@@ -70,8 +70,7 @@ def get_domain_name_location(byte_list: list) -> int:
     Return the result as a decimal value
     """
     num = bytes_to_val(byte_list)
-    return num & 16383
-
+    return num & 0x3fff
 
 def parse_cli_query(q_domain: str, q_type: str, q_server: str = None) -> Tuple[list, int, str]:
     """
@@ -112,14 +111,21 @@ def format_query(q_domain: list, q_type: int) -> bytearray:
     - class: Internet
     """
     query = bytearray()
+
     query.extend(val_to_2_bytes(randint(0,65535)))       # Add Transaction ID
-    query.extend(val_to_2_bytes(256))                    # Add flags
+    query.extend(val_to_2_bytes(0x100))                  # Add flags
     query.extend(val_to_2_bytes(1))                      # Add number of questions
     query.extend(val_to_2_bytes(0))                      # Add number of answers
-    query.extend(val_to_n_bytes(0,1))                    # Add number of additional/authority records
-    
-    query.extend(val_to_n_bytes(q_type,2))               # Add type
-    query.extend(val_to_n_bytes(1,2))                    # Add class
+    query.extend(val_to_2_bytes(0))                      # Add authority RRs
+    query.extend(val_to_2_bytes(0))                      # Add additional RRs
+    for subdomain in q_domain:
+        query.extend(val_to_n_bytes(len(subdomain),1))   # Add length of subdomain
+        for char in subdomain:
+            query.extend(val_to_n_bytes(ord(char),1))    # Add each character in subdomain
+    query.extend(val_to_n_bytes(0,1))                    # Terminate domain name
+    query.extend(val_to_2_bytes(q_type))                 # Add type
+    query.extend(val_to_2_bytes(0x0001))                 # Add class
+
     return query
 
 
@@ -129,8 +135,16 @@ def parse_response(resp_bytes: bytes) -> list:
     Take response bytes as a parameter
     Return a list of tuples in the format of (name, address, ttl)
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    # number of answers in response
+    rr_ans = bytes_to_val(resp_bytes[6:8])
+
+    # index of bytesarray where the answers start
+    answer_start = 12
+    while resp_bytes[answer_start] != 0:
+        answer_start += 1
+    answer_start += 5
+    print(parse_answers(resp_bytes, answer_start, rr_ans))
+    return parse_answers(resp_bytes, answer_start, rr_ans)
 
 
 def parse_answers(resp_bytes: bytes, answer_start: int, rr_ans: int) -> List[tuple]:
@@ -139,8 +153,56 @@ def parse_answers(resp_bytes: bytes, answer_start: int, rr_ans: int) -> List[tup
     Take response bytes, offset, and the number of answers as parameters
     Return a list of tuples in the format of (name, address, ttl)
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    # List for tuples
+    answers = []
+    # Track the answer number
+    currentAnswer = 1
+    # Loop to retrieve each asnwer information
+    while currentAnswer <= rr_ans:
+        # Check whether the domain is given or it is a pointer
+        pointer = resp_bytes[answer_start:answer_start+2]
+        move = False
+        if get_2_bits(pointer) == 3:         # if it is a pointer, then get the offset
+            domainIndex = get_domain_name_location(pointer)
+        else:                                # start from current position
+            domainIndex = answer_start
+            move = True
+        
+        subdomains = []
+        while resp_bytes[domainIndex] != 0:
+            subdomain = ""
+            for _ in range(resp_bytes[domainIndex]):
+                subdomain += chr(resp_bytes[domainIndex+1])
+                domainIndex += 1
+                if move:
+                    answer_start += 1
+            subdomains.append(subdomain)
+            domainIndex += 1
+        answer_start += 2
+        if move:
+            answer_start += 1
+        domain = ".".join(subdomains)
+        print(domain)
+        
+        # Retrieve TTL
+        ttl = int.from_bytes(resp_bytes[answer_start+4:answer_start+8],byteorder='big')
+        print(ttl)
+
+        # Retrieve address
+        dataLength = int.from_bytes(resp_bytes[answer_start+8:answer_start+10],byteorder='big')
+        print(dataLength)
+        if dataLength == 4:             # IPv4 request
+            address = parse_address_a(4, resp_bytes[answer_start+10:answer_start+dataLength+11])
+        else:             # IPv4 request
+            address = parse_address_aaaa(16, resp_bytes[answer_start+10:answer_start+dataLength+11])
+
+
+        answers.append((domain,address,ttl))
+
+        # Position of first byte in the next answer
+        answer_start += (10 + dataLength)
+        currentAnswer += 1
+    return answers
 
 
 def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
@@ -148,14 +210,19 @@ def parse_address_a(addr_len: int, addr_bytes: bytes) -> str:
     Parse IPv4 address
     Convert bytes to human-readable dotted-decimal
     """
-    # TODO: Implement this function
-    raise NotImplementedError
+    return "{}.{}.{}.{}".format(addr_bytes[0],addr_bytes[1],addr_bytes[2],addr_bytes[3])
 
 
 def parse_address_aaaa(addr_len: int, addr_bytes: bytes) -> str:
     """Extract IPv6 address"""
-    # TODO: Implement this function
-    raise NotImplementedError
+    address = ""
+    index = 0
+    while index <= 15:
+        address += hex(int.from_bytes(addr_bytes[index:index+2], byteorder='big'))[2:]
+        if index != 14:
+            address += ":"
+        index += 2
+    return address
 
 
 def resolve(query: tuple) -> None:
