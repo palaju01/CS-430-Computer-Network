@@ -55,9 +55,7 @@ def checksum(pkt: bytes) -> int:
     return result
 
 
-def parse_reply(
-    my_socket: socket.socket, req_id: int, timeout: int, addr_dst: str
-) -> tuple:
+def parse_reply(my_socket: socket.socket, req_id: int, timeout: int, addr_dst: str) -> tuple:
     """Receive an Echo reply"""
     time_left = timeout
     while True:
@@ -71,8 +69,9 @@ def parse_reply(
         pkt_rcvd, addr = my_socket.recvfrom(1024)
         if addr[0] != addr_dst:
             raise ValueError(f"Wrong sender: {addr[0]}")
-        # TODO: Extract ICMP header from the IP packet and parse it
-        # print_raw_bytes(pkt_rcvd)
+        # Extract ICMP header from the IP packet and parse it
+        #print_raw_bytes(pkt_rcvd)
+        
         # DONE: End of ICMP parsing
         time_left = time_left - how_long_in_select
         if time_left <= 0:
@@ -121,9 +120,24 @@ def send_request(addr_dst: str, seq_num: int, timeout: int = 1) -> tuple:
 
 def ping(host: str, pkts: int, timeout: int = 1) -> None:
     """Main loop"""
-    # TODO: Implement the main loop
+    # print title
+    ip = socket.gethostbyname(host)
+    print("--- Ping {} ({}) using Python ---".format(host,ip))
 
-    # DONE
+    transmitted = 0
+    received = 0
+    for request_id in range(pkts):
+        sequence_num = (request_id+1) * 0x01
+        #request = format_request(request_id,sequence_num)
+        try:
+            transmitted += 1
+            start_time = time.time()
+            length, ttl = send_request(ip, sequence_num, timeout)
+            time_used = time.time() - start_time
+            received += 1
+            print("{} bytes from {}: icmp_seq={} TTL={} time={} ms".format(length,ip,request_id+1,ttl,time_used))
+        except TimeoutError:
+            print("No response: Request timed out after {} sec".format(timeout))
     return
 
 
