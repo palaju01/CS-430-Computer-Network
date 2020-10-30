@@ -68,28 +68,27 @@ def parse_reply(my_socket: socket.socket, req_id: int, timeout: int, addr_dst: s
         time_rcvd = time.time()
         pkt_rcvd, addr = my_socket.recvfrom(1024)
         if addr[0] != addr_dst:
-            raise ValueError(f"Wrong sender: {addr[0]}")
+            raise ValueError("Wrong sender. Expected {}, received from {}".format(addr_dst,addr[0]))
         # Extract ICMP header from the IP packet and parse it
         #print_raw_bytes(pkt_rcvd)
-        _,_,packet_size,_,_,ttl,_,_,_,destination_address = struct.unpack('!BBHHHBBH4s4s',pkt_rcvd[:20])
+        _,_,packet_size,_,_,ttl,_,_,destination_address,_ = struct.unpack('!BBHHHBBH4s4s',pkt_rcvd[:20])
         icmp_header = struct.unpack('!bbHHhd',pkt_rcvd[20:])
+        #print("type,code,checksum,identificator,sequence number, time")
+        #print(icmp_header)
         # Convert bytes to destination address
         destination_address = ".".join(map(str,struct.unpack("BBBB",destination_address)))
-        #print(destination_address)
-        #print(struct.unpack('!BBHHHBBH4s4s',pkt_rcvd[:20]))
-        #print(icmp_header)
-        if icmp_header[0] != 0:
+        if icmp_header[0] != 0: # Incorrect type
             raise ValueError("Incorrect type. Expected 0, received {}".format(icmp_header[0]))
-        elif icmp_header[1] != 0:
+        elif icmp_header[1] != 0: # Incorrect code
             raise ValueError("Incorrect code. Expected 0, received {}".format(icmp_header[1]))
-        elif icmp_header[2] != checksum(pkt_rcvd[20:22]+pkt_rcvd[24:]):
+        elif icmp_header[2] != checksum(pkt_rcvd[20:22]+pkt_rcvd[24:]): # Incorrect checksum
             raise ValueError("Incorrect checksum. Expected {}, received {}".format(checksum(pkt_rcvd[20:22]+pkt_rcvd[24:]),icmp_header[2]))
+        elif req_id != icmp_header[3]: # Incorrect id
+            raise ValueError("Incorrect id. Expected {}, received {}".format(req_id,icmp_header[3]))
         else:
-            return (destination_address,packet_size,(time_rcvd-icmp_header[5])*1000,ttl,icmp_header[4])
+            return (addr_dst,packet_size,(time_rcvd-icmp_header[5])*1000,ttl,icmp_header[4])
         #print(ip_header)
         #print(icmp_header)
-        
-        
         
         # DONE: End of ICMP parsing
         time_left = time_left - how_long_in_select
@@ -101,18 +100,18 @@ def format_request(req_id: int, seq_num: int) -> bytes:
     """Format an Echo request"""
     my_checksum = 0
     header = struct.pack(
-        "bbHHh", ECHO_REQUEST_TYPE, ECHO_REQUEST_CODE, my_checksum, req_id, seq_num
+        "!bbHHh", ECHO_REQUEST_TYPE, ECHO_REQUEST_CODE, my_checksum, req_id, seq_num
     )
-    data = struct.pack("d", time.time())
+    data = struct.pack("!d", time.time())
     my_checksum = checksum(header + data)
 
-    if sys.platform == "darwin":
-        my_checksum = socket.htons(my_checksum) & 0xFFFF
-    else:
-        my_checksum = socket.htons(my_checksum)
+    #if sys.platform == "darwin":
+    #    my_checksum = socket.htons(my_checksum) & 0xFFFF
+    #else:
+    #    my_checksum = socket.htons(my_checksum)
 
     header = struct.pack(
-        "bbHHh", ECHO_REQUEST_TYPE, ECHO_REQUEST_CODE, my_checksum, req_id, seq_num
+        "!bbHHh", ECHO_REQUEST_TYPE, ECHO_REQUEST_CODE, my_checksum, req_id, seq_num
     )
     packet = header + data
     return packet
@@ -124,7 +123,6 @@ def send_request(addr_dst: str, seq_num: int, timeout: int = 1) -> tuple:
     proto = socket.getprotobyname("icmp")
     my_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, proto)
     my_id = os.getpid() & 0xFFFF
-
     packet = format_request(my_id, seq_num)
     my_socket.sendto(packet, (addr_dst, 1))
 
@@ -141,18 +139,27 @@ def ping(host: str, pkts: int, timeout: int = 1) -> None:
     """Main loop"""
     # print title
     ip = socket.gethostbyname(host)
-    print("--- Ping {} ({}) using Python ---".format(host,ip))
+    print("\n--- Ping {} ({}) using Python ---\n".format(host,ip))
     transmitted = 0
     received = 0
+    times = []
     for request_id in range(pkts):
         sequence_num = (request_id+1) * 0x01
         try:
             transmitted += 1
             data_list = send_request(ip, sequence_num, timeout)
             received += 1
-            print("{} bytes from {}: icmp_seq={} TTL={} time={} ms".format(data_list[1],data_list[0],data_list[4],data_list[3],data_list[2]))
+            times.append(data_list[2])
+            print("{} bytes from {}: icmp_seq={} TTL={} time={} ms".format(data_list[1],data_list[0],data_list[4],data_list[3],str(round(data_list[2],2))))
         except TimeoutError:
             print("No response: Request timed out after {} sec".format(timeout))
+    
+    print("\n--- {} ping statistics ---".format(host))
+    print("{} packets transmitted, {} received, {}% packet loss".format(transmitted,received,int(100*((transmitted-received)/transmitted))))
+    
+    if received != 0:
+        print("rtt min/avg/max/mdev = {}/{}/{}/{} ms".format(round(min(times),3),\
+        round(mean(times),3), round(max(times),3), round(stdev(times),3)))
     return
 
 
