@@ -112,7 +112,7 @@ def traceroute(hostname: str, max_hops: int = 30) -> None:
     """
     dest_addr = socket.gethostbyname(hostname)
     # Print title
-    print("\nTracing route to {} [{}]\n".format(hostname,dest_addr)+ "over a maximum of {} hops\n".format(max_hops))
+    print("\nTracing route to {} [{}] ".format(hostname,dest_addr)+ "over a maximum of {} hops. \n".format(max_hops))
 
     # Set up request id
     req_id = os.getpid() & 0xFFFF
@@ -120,8 +120,10 @@ def traceroute(hostname: str, max_hops: int = 30) -> None:
         ttl = 0
         destination_reached = False
         sock.settimeout(1)
+
         # Loop until the destination is reached
         while ttl < max_hops and not destination_reached:
+            ttl += 1
             print(f"{ttl:>3d}   ", end="")
             seq_id = 0
             comment = ""
@@ -134,30 +136,37 @@ def traceroute(hostname: str, max_hops: int = 30) -> None:
                 try:
                     pkt_in, resp_addr, time_rcvd = receive_reply(sock)
                     parse_reply(pkt_in)
-                    comment = ("{} [{}]".format(socket.gethostbyaddr(resp_addr[0])[0], resp_addr[0]))
-                # If value error print ! and make comment
+                    # Provide domain name if possible
+                    try:
+                        comment = f"{socket.gethostbyaddr(resp_addr[0])[0]} [{resp_addr[0]}]"
+                    except:
+                        comment = resp_addr[0]
+                # If ValueError print ! and make comment
                 except ValueError as val_err:
-                    print(f"{'!':>3s}      ", end="")
-                    print(f"Error while parsing the response: {str(val_err)}")
+                    print(f"{'!':>3s}      ", end="")                    
+                    comment = (comment if comment else f"Error while parsing the response: {str(val_err)}")
                     continue
                 
-                # If time out print * and make comment
+                # If Timeout print * and make comment
                 except (socket.timeout, TimeoutError) as to_err:
-                    print(f"{'*':>3s}      ", end="")
-                    print(f"Request timed out: {str(to_err)}")
+                    print(f"{'*':>3s}      ", end="")  
+                    comment = (comment if comment else f"Request timed out: {str(to_err)}")
                     continue
-
+                    
                 # If there are no errors
                 rtt = (time_rcvd - time_sent) * 1000
-
+                
+                # Show rtt if greater than 1 ms
                 if rtt > 1:
                     print(f"{rtt:>3.0f} ms   ", end="")
                 else:
                     print(f"{'<1':>3s} ms   ", end="")
-                if not comment:
-                    comment = resp_addr[0]
+
+                # If we reach the destination, let's stop
+                if resp_addr[0] == dest_addr:
+                    destination_reached = True
             print(comment)
-            ttl += 1
+
     print("\nTrace complete.")
 
 def main():
