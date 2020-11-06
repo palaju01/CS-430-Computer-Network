@@ -90,18 +90,14 @@ def parse_reply(pkt_bytes: bytes) -> None:
         "!BBHHH", header
     )
     if repl_type not in expected_types_and_codes:
-        print("type")
         raise ValueError("Incorrect type {} received ".format(repl_type) + "instead of {}".format(', '.join([str(t) for t in expected_types_and_codes])))
     if repl_code not in expected_types_and_codes[repl_type]:
-        print("code")
         raise ValueError("Incorrect code {} received with type {}".format(repl_code,repl_type)
     )
     if checksum(header + data) != 0:
-        print("checksum")
-        print(checksum(header + data))
         raise ValueError(
             "Incorrect checksum {} received ".format(hex(repl_checksum)[2:]) + "instead of {}".format(hex(checksum(header + data))[2:])
-        )  
+        )
 
 
 def traceroute(hostname: str, max_hops: int = 30) -> None:
