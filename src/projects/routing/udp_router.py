@@ -158,9 +158,14 @@ def send_hello(msg_txt: str, src_node: str, dst_node: str, routing_table: dict) 
     :param dst_node: message recipient
     :param routing_table: this router's routing table
     """
-    message = format_hello(msg_txt,src_node,dst_node)
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.sendto(message, (routing_table[dst_node][1], BASE_PORT))
+    # bind host IP with ICMP port
+    this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    this_socket.bind((THIS_HOST,0))
+    destination_port = BASE_PORT + int(routing_table[dst_node][1].split(".")[-1])
+    
+    # format hello message and send it
+    msg = format_hello(msg_txt, src_node, dst_node)
+    this_socket.sendto(msg, (routing_table[dst_node][1], destination_port))
 
 
 def print_status(routing_table: dict) -> None:
@@ -208,21 +213,22 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
     while True:
         # The following section determines when to "randomly" send messages to other routers.
 
-        rand = random.randrange(0,10)
+        rand = random.randrange(0,20)
         # random hello message
-        if rand == 0:
-            print("random hello message")
+        if rand == 5:
+            #print("random hello message")
             msg = random.choice(ubuntu_release)
             dst = random.choice(list(routing_table.keys()))
             send_hello(msg,THIS_HOST,dst,routing_table)
         # random update message
-        elif rand == 5:
-            print("random update message")
+        elif rand == 10:
+            #print("random update message")
             for neighbor in neighbors:
                 send_update(neighbor,routing_table)
         # random status request message - optional
-        elif rand == 9:
-            print("random status request")
+        elif rand == 15:
+            #print("random status request")
+            pass
 
 
         # The following section process incoming messages from other routers.
@@ -231,9 +237,10 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
 
         for sckt in new_messages[0]:
             msg, addr = sckt.recvfrom(1024)
-
+            print(msg[0])
             if msg[0] == 0:
                 # Update message
+                print("Received update message")
                 updated = parse_update(msg, addr[0], routing_table)
                 if updated:
                     print_status(routing_table)
@@ -241,7 +248,8 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
                         send_update(neighbor,routing_table)
             elif msg[0] == 1:
                 # Hello message
-                print(parse_hello(msg, routing_table))
+                print("Received hello message")
+                parse_hello(msg, routing_table)
             elif msg[0] == 2:
                 # Status request - optional
                 print("Status request")
