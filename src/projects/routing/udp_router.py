@@ -89,13 +89,21 @@ def parse_update(msg: bytes, neigh_addr: str, routing_table: dict) -> bool:
     return updated
 
 
-def send_update(node: str) -> None:
+def send_update(node: str, routing_table: dict) -> None:
     """
     Send update
     
     :param node: recipient of the update message
+    :param routing_table: this router's routing table
     """
-    raise NotImplementedError
+    # bind host IP with ICMP port
+    this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    this_socket.bind((THIS_HOST,0))
+    destination_port = BASE_PORT + int(node.split(".")[-1])
+    
+    # format update and send it
+    msg = format_update(routing_table)
+    this_socket.sendto(msg, (node, destination_port))
 
 
 def format_hello(msg_txt: str, src_node: str, dst_node: str) -> bytes:
@@ -161,7 +169,10 @@ def print_status(routing_table: dict) -> None:
 
     :param routing_table: this router's routing table
     """
-    raise NotImplementedError
+    print("     {:^14} {:^10} {:^14}".format("Host","Cost","Via"))
+    for router in routing_table:
+        print("     {:^14} {:^10} {:^14}".format(router,routing_table[router][0],routing_table[router][1]))
+
 
 
 def route(neighbors: set, routing_table: dict, timeout: int = 5):
@@ -184,12 +195,86 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
         "Yakkety Yak",
         "Xenial Xerus",
     ]
-    raise NotImplementedError
+    listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    listener.bind((THIS_HOST, BASE_PORT + int(THIS_HOST.split(".")[-1])))
 
+    # print router status 
+    print_status(routing_table)
+
+    # send updates to all neighbours at start
+    for neighbor in neighbors:
+        send_update(neighbor, routing_table)
+
+    while True:
+        # The following section determines when to "randomly" send messages to other routers.
+
+        rand = random.randrange(0,10)
+        # random hello message
+        if rand == 0:
+            print("random hello message")
+            msg = random.choice(ubuntu_release)
+            dst = random.choice(list(routing_table.keys()))
+            send_hello(msg,THIS_HOST,dst,routing_table)
+        # random update message
+        elif rand == 5:
+            print("random update message")
+            for neighbor in neighbors:
+                send_update(neighbor,routing_table)
+        # random status request message - optional
+        elif rand == 9:
+            print("random status request")
+
+
+        # The following section process incoming messages from other routers.
+
+        new_messages = select.select([listener], [], [], timeout)
+
+        for sckt in new_messages[0]:
+            msg, addr = sckt.recvfrom(1024)
+
+            if msg[0] == 0:
+                # Update message
+                updated = parse_update(msg, addr[0], routing_table)
+                if updated:
+                    print_status(routing_table)
+                    for neighbor in neighbors:
+                        send_update(neighbor,routing_table)
+            elif msg[0] == 1:
+                # Hello message
+                print(parse_hello(msg, routing_table))
+            elif msg[0] == 2:
+                # Status request - optional
+                print("Status request")
+            elif msg[0] == 3:
+                # Status response - optional
+                print("Status response")
+
+            # If the type is not 0 to 3, the packet will be dropped.
 
 def main():
     """Main function"""
-    print("started")
+    arg_parser = argparse.ArgumentParser(description="Parse arguments")
+    arg_parser.add_argument("router_address", help="IP for new router")
+    arg_parser.add_argument("-c", "--configuration", default="data/projects/routing/network_simple.txt", help="Path to configuration file")
+    arg_parser.add_argument("-d", "--debug", action="store_true", help="Enable logging.DEBUG mode")
+    args = arg_parser.parse_args()
+
+    logger = logging.getLogger("root")
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+    else:
+        logger.setLevel(logging.WARNING)
+    logging.basicConfig(format="%(levelname)s: %(message)s", level=logger.level)
+
+    # set up the router IP address
+    global THIS_HOST
+    THIS_HOST = args.router_address
+
+    # read configuration file
+    neighbors,routing_table = read_config_file(args.configuration)
+
+    # start the router
+    route(neighbors,routing_table)
 
 if __name__ == "__main__":
     main()
