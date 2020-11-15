@@ -38,7 +38,6 @@ def read_config_file(filename: str) -> Tuple[Set, Dict]:
                 router_list = list(router.split("\n"))
                 if router_list[0] == THIS_HOST: 
                     for neighbor in router_list[1:]:
-                        # check if there is any neighbor
                         if neighbor != "":
                             next_hop, cost = neighbor.split(" ")
                             neighbors.add(next_hop)
@@ -55,13 +54,12 @@ def format_update(routing_table: dict) -> bytes:
     :param routing_table: routing table of this router
     :returns the formatted message
     """
-    message = bytearray()
-    message.append(0x0)
-
+    # add message type
+    message = struct.pack("!B",0)
+    # add routing table information
     for dest in routing_table:
-        for num in dest.split("."):
-            message.append(int(num))
-        message.append(routing_table[dest][0])
+        address = list(map(int, dest.split(".")))
+        message += struct.pack("!BBBBB", address[0], address[1], address[2], address[3], routing_table[dest][0])
     return message
 
 
@@ -72,6 +70,7 @@ def send_update(node: str, routing_table: dict) -> None:
     :param node: recipient of the update message
     :param routing_table: this router's routing table
     """
+    # only send update to known IPs
     if node in routing_table:
         # bind host IP with ICMP port
         this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -80,8 +79,10 @@ def send_update(node: str, routing_table: dict) -> None:
         
         # format update and send it
         msg = format_update(routing_table)
-        this_socket.sendto(msg, (node, destination_port))
+        this_socket.sendto(msg, (routing_table[node][1], destination_port))
         print("Sent update to {}".format(node))
+    else:
+        print("Could not sent update to IP address {}".format(node))
 
 
 def parse_update(msg: bytes, neigh_addr: str, routing_table: dict) -> bool:
@@ -94,16 +95,19 @@ def parse_update(msg: bytes, neigh_addr: str, routing_table: dict) -> bool:
     :returns True is the table has been updated, False otherwise
     """
     updated = False
-    index = 1   # index
+    index = 1
     while index < len(msg) - 1:
-        addr = str(msg[index]) + "." + str(msg[index+1]) + "." + str(msg[index+2]) + "." + str(msg[index+3])
+        addr = ".".join(map(str,struct.unpack("!BBBB", msg[index:index+4])))
         cost = msg[index+4]
+        # if addr already in routing table, update information
         if addr in routing_table:
-            if routing_table[addr][0] > routing_table[neigh_addr][0]+cost:
+            if routing_table[neigh_addr][0]+cost < routing_table[addr][0]:
                 routing_table[addr] = [routing_table[neigh_addr][0]+cost, neigh_addr]
                 updated = True
+        # if addr not in routing table, and it's not this router's IP
+        # create new instance and calculate its value
         elif addr != THIS_HOST:
-            routing_table[addr] = [cost+routing_table[neigh_addr][0],neigh_addr]
+            routing_table[addr] = [routing_table[neigh_addr][0]+cost, neigh_addr]
             updated = True
         index += 5
     return updated
@@ -117,19 +121,18 @@ def format_hello(msg_txt: str, src_node: str, dst_node: str) -> bytes:
     :param src_node: message originator
     :param dst_node: message recipient
     """
-    msg = bytearray()
-    msg.append(0x1)
-
+    # add message type
+    message = struct.pack("!B",1)
     # add source IP address
-    for num in src_node.split("."):
-        msg.append(int(num))
+    source = list(map(int, src_node.split(".")))
+    message += struct.pack("!BBBB", source[0], source[1], source[2], source[3])
     # add destination IP address
-    for num in dst_node.split("."):
-        msg.append(int(num))
+    destination = list(map(int, dst_node.split(".")))
+    message += struct.pack("!BBBB", destination[0], destination[1], destination[2], destination[3])
     # add encoded message
-    msg = msg + bytearray(msg_txt.encode())
+    message += (msg_txt.encode())
 
-    return msg
+    return message
 
 def send_hello(msg_txt: str, src_node: str, dst_node: str, routing_table: dict) -> None:
     """
@@ -150,6 +153,8 @@ def send_hello(msg_txt: str, src_node: str, dst_node: str, routing_table: dict) 
         msg = format_hello(msg_txt, src_node, dst_node)
         this_socket.sendto(msg, (routing_table[dst_node][1], destination_port))
         print("Sent hello message to {}".format(dst_node))
+    else:
+        print("Could not sent hello to IP address {}".format(dst_node))
 
 
 def parse_hello(msg: bytes, routing_table: dict) -> str:
@@ -160,13 +165,13 @@ def parse_hello(msg: bytes, routing_table: dict) -> str:
     :param routing_table: this router's routing table
     :returns the action taken as a string
     """
-    sender = str(msg[1]) + "." + str(msg[2]) + "." + str(msg[3]) + "." + str(msg[4])
-    destination = str(msg[5]) + "." + str(msg[6]) + "." + str(msg[7]) + "." + str(msg[8])
+    sender = ".".join(map(str,struct.unpack("!BBBB",msg[1:5])))
+    destination = ".".join(map(str,struct.unpack("!BBBB",msg[5:9])))
     data = msg[9:].decode()
 
     if destination == THIS_HOST:
-            print("Received {} from {}".format(data,sender))
-            return "Received {} from {}".format(data,sender)
+        print("Received {} from {}".format(data,sender))
+        return "Received {} from {}".format(data,sender)
     else:
         send_hello(data,sender,destination, routing_table)
         return "Forwarded {} to {}".format(data,routing_table[destination][1])
@@ -190,8 +195,8 @@ def format_status_request(dst_node: str) -> bytes:
     :param dst_node: message recipient
     :returns the formatted message
     """
-    address = list(dst_node.split("."))
-    message = struct.pack("!BBBBB", 2, int(address[0]), int(address[1]), int(address[2]), int(address[3]))
+    address = list(map(int,dst_node.split(".")))
+    message = struct.pack("!BBBBB", 2, address[0], address[1], address[2], address[3])
     return message
 
 
@@ -211,6 +216,8 @@ def send_status_request(dst_node: str, routing_table: dict) -> None:
         msg = format_status_request(THIS_HOST)
         this_socket.sendto(msg, (routing_table[dst_node][1], destination_port))
         print("Sent status request to {}".format(dst_node))
+    else:
+        print("Could not sent status request to IP address {}".format(dst_node))
 
 
 def parse_status_request(msg: bytes, routing_table: dict) -> str:
@@ -221,7 +228,7 @@ def parse_status_request(msg: bytes, routing_table: dict) -> str:
     :param routing_table: this router's routing table
     :returns the action taken as a string
     """
-    source = str(msg[1]) + "." + str(msg[2]) + "." + str(msg[3]) + "." + str(msg[4])
+    source = ".".join(map(str,struct.unpack("!BBBB",msg[1:5])))
     print("Received status request from {}".format(source))
     send_status_response(source,routing_table)
     return "Received status request from {}".format(source)
@@ -234,18 +241,15 @@ def format_status_response(dst_node: str, routing_table: dict) -> bytes:
     :param routing_table: routing table of this router
     :returns the formatted message
     """
-    message = bytearray()
-    message.append(0x3)
-
-    # add destination address
-    for dst in list(dst_node.split(".")):
-        message.append(int(dst))
-    
-    # add routing table data
+    # add message type
+    message = struct.pack("!B",3)
+    # add destination IP address
+    source = list(map(int,dst_node.split(".")))
+    message += struct.pack("!BBBB", source[0], source[1], source[2], source[3])
+    # add routing table information
     for dest in routing_table:
-        message.append(routing_table[dest][0])
-        for num in dest.split("."):
-            message.append(int(num))
+        address = list(map(int,dest.split(".")))
+        message += struct.pack("!BBBBB",routing_table[dest][0], address[0], address[1], address[2], address[3])
     return message
 
 
@@ -266,6 +270,8 @@ def send_status_response(dst_node: str, routing_table: dict) -> None:
         msg = format_status_response(dst_node,routing_table)
         this_socket.sendto(msg, (routing_table[dst_node][1], destination_port))
         print("Sent status response to {}".format(dst_node))
+    else:
+        print("Could not sent status response to IP address {}".format(dst_node))
 
 
 def parse_status_response(msg: bytes, routing_table: dict) -> str:
@@ -276,7 +282,7 @@ def parse_status_response(msg: bytes, routing_table: dict) -> str:
     :param routing_table: this router's routing table
     :returns the action taken as a string
     """
-    destination = str(msg[1]) + "." + str(msg[2]) + "." + str(msg[3]) + "." + str(msg[4])
+    destination = ".".join(map(str,struct.unpack("!BBBB",msg[1:5])))
     if destination == THIS_HOST:
             print("Received status response")
             return "Received status response"
@@ -317,18 +323,15 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
         rand = random.randrange(0,20)
         # random hello message
         if rand == 5:
-            #print("random hello message")
             msg = random.choice(ubuntu_release)
             dst = random.choice(list(routing_table.keys()))
             send_hello(msg,THIS_HOST,dst,routing_table)
         # random update message
         elif rand == 10:
-            #print("random update message")
             dst = random.choice(list(routing_table.keys()))
             send_update(dst,routing_table)
         # random status request message - optional
         elif rand == 15:
-            #print("random status request")
             dst = random.choice(list(routing_table.keys()))
             send_status_request(dst,routing_table)
 
