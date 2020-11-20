@@ -338,11 +338,11 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
             send_hello(msg,THIS_HOST,dst,routing_table)
         # random update message to neighbor
         elif rand == 20:
-            dst = random.choice(neighbors)
+            dst = random.choice(list(neighbors))
             send_update(dst,routing_table)
         # random status request message to neighbor
         elif rand == 30:
-            dst = random.choice(neighbors)
+            dst = random.choice(list(neighbors))
             send_status_request(dst,routing_table)
 
 
