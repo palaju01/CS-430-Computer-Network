@@ -72,7 +72,7 @@ def send_update(node: str, routing_table: dict) -> None:
     """
     # only send update to known IPs
     if node in routing_table:
-        # bind host IP with ICMP port
+        # bind host IP with port
         this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         this_socket.bind((THIS_HOST,0))
         destination_port = BASE_PORT + int(node.split(".")[-1])
@@ -120,6 +120,7 @@ def format_hello(msg_txt: str, src_node: str, dst_node: str) -> bytes:
     :param msg_txt: message text
     :param src_node: message originator
     :param dst_node: message recipient
+    :returns the formatted message
     """
     # add message type
     message = struct.pack("!B",1)
@@ -144,7 +145,7 @@ def send_hello(msg_txt: str, src_node: str, dst_node: str, routing_table: dict) 
     :param routing_table: this router's routing table
     """
     if dst_node in routing_table:
-        # bind host IP with ICMP port
+        # bind host IP port
         this_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         this_socket.bind((THIS_HOST,0))
         destination_port = BASE_PORT + int(routing_table[dst_node][1].split(".")[-1])
@@ -169,9 +170,11 @@ def parse_hello(msg: bytes, routing_table: dict) -> str:
     destination = ".".join(map(str,struct.unpack("!BBBB",msg[5:9])))
     data = msg[9:].decode()
 
+    # If the message is for this router, print and return
     if destination == THIS_HOST:
         print("Received {} from {}".format(data,sender))
         return "Received {} from {}".format(data,sender)
+    # If not, then send the message to the next router
     else:
         send_hello(data,sender,destination, routing_table)
         return "Forwarded {} to {}".format(data,routing_table[destination][1])
@@ -204,6 +207,7 @@ def send_status_request(dst_node: str, routing_table: dict) -> None:
     """
     Send status request
 
+    :param dst_node: message recipient
     :param routing_table: routing table of this router
     """
     if dst_node in routing_table:
@@ -238,6 +242,7 @@ def format_status_response(dst_node: str, routing_table: dict) -> bytes:
     """
     Format status response message
 
+    :param dst_node: message recipient
     :param routing_table: routing table of this router
     :returns the formatted message
     """
@@ -257,6 +262,7 @@ def send_status_response(dst_node: str, routing_table: dict) -> None:
     """
     Send status response message
 
+    :param dst_node: message recipient
     :param routing_table: routing table of this router
     """
     if dst_node in routing_table:
@@ -274,18 +280,19 @@ def send_status_response(dst_node: str, routing_table: dict) -> None:
         print("Could not sent status response to IP address {}".format(dst_node))
 
 
-def parse_status_response(msg: bytes, routing_table: dict) -> str:
+def parse_status_response(msg: bytes, src_node: str, routing_table: dict) -> str:
     """
     Parse the HELLO message
 
     :param msg: message
+    :param src_node: message originator
     :param routing_table: this router's routing table
     :returns the action taken as a string
     """
     destination = ".".join(map(str,struct.unpack("!BBBB",msg[1:5])))
     if destination == THIS_HOST:
-            print("Received status response")
-            return "Received status response"
+            print("Received status response from {}. It's still alive!".format(src_node))
+            return "Received status response from {}. It's still alive!".format(src_node)
     else:
         send_status_response(destination,routing_table)
         return "Forwarded status response to {}".format(routing_table[destination][1])
@@ -299,6 +306,7 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
     :param routing_table: this router's routing table
     :param timeout: default 5
     """
+    # Message options for routers to send between them
     ubuntu_release = [
         "Groovy Gorilla",
         "Focal Fossa",
@@ -311,6 +319,7 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
         "Yakkety Yak",
         "Xenial Xerus",
     ]
+
     listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listener.bind((THIS_HOST, BASE_PORT + int(THIS_HOST.split(".")[-1])))
 
@@ -318,28 +327,27 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
     print_status(routing_table)
 
     while True:
-        # The following section determines when to "randomly" send messages to other routers.
+        # The following section determines when the router will randomly 
+        # send messages to either its neighbors or other routers in the network.
 
-        rand = random.randrange(0,20)
-        # random hello message
-        if rand == 5:
+        rand = random.randrange(0,40)
+        # random hello message to any IP on routing table
+        if rand == 10:
             msg = random.choice(ubuntu_release)
             dst = random.choice(list(routing_table.keys()))
             send_hello(msg,THIS_HOST,dst,routing_table)
-        # random update message
-        elif rand == 10:
-            dst = random.choice(list(routing_table.keys()))
+        # random update message to neighbor
+        elif rand == 20:
+            dst = random.choice(neighbors)
             send_update(dst,routing_table)
-        # random status request message - optional
-        elif rand == 15:
-            dst = random.choice(list(routing_table.keys()))
+        # random status request message to neighbor
+        elif rand == 30:
+            dst = random.choice(neighbors)
             send_status_request(dst,routing_table)
 
 
-        # The following section process incoming messages from other routers.
-
+        # The following section process incoming messages from other routers in the network.
         new_messages = select.select([listener], [], [], timeout)
-
         for sckt in new_messages[0]:
             msg, addr = sckt.recvfrom(1024)
             if msg[0] == 0:
@@ -357,9 +365,8 @@ def route(neighbors: set, routing_table: dict, timeout: int = 5):
                 parse_status_request(msg, routing_table)
             elif msg[0] == 3:
                 # Status response
-                parse_status_response(msg, routing_table)
+                parse_status_response(msg, addr[0], routing_table)
 
-            # If the type is not 0 to 3, the packet will be dropped.
 
 def main():
     """Main function"""
