@@ -35,7 +35,7 @@ Neighbor_3_IP_address Cost_of_getting_to_neighbor_3
 
 File *data/projects/routing/network_1_config.txt* represents the following network:
 
-![Simple network](network_1_layout.png)
+![Simple network](src/projects/routing/network_1_layout.png)
 
 Content of *data/projects/routing/network_1_config.txt*
 
