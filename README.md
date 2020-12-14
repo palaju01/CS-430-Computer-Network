@@ -273,7 +273,7 @@ Alternatively, start all of them at once:
 ./tests/projects/routing/run_simulation.sh
 ```
 
-![Simulation](routing.apng)
+![Simulation](src/projects/routing/routing.apng)
 
 ### Capturing the traffic
 
